@@ -1,0 +1,11 @@
+# Jenkins OWASP Python Demo
+
+This repository is meant to be used with a Jenkins Pipeline that scans Python code for OWASP-related issues (SAST, dependencies, secrets/misconfig).
+
+## Stages
+- Semgrep (OWASP + Python) → SARIF
+- Bandit (Python SAST) → JSON
+- pip-audit (deps vulnerabilities) → JSON
+- Trivy FS (vuln/secret/config) → SARIF
+
+Reports are saved into `security-reports/` and published via Warnings NG (SARIF).
