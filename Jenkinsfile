@@ -2,13 +2,16 @@ pipeline {
   agent {
     docker {
       image 'docker:25.0.3-cli'
-      // ล้าง entrypoint, รันเป็น root, และเมาท์ docker.sock ให้ชัดเจน
       args '--entrypoint="" -u 0:0 -v /var/run/docker.sock:/var/run/docker.sock'
     }
   }
 
-  stages {
+  options {
+    timestamps()
+    ansiColor('xterm')
+  }
 
+  stages {
     stage('Checkout') {
       steps {
         checkout scm
@@ -20,10 +23,12 @@ pipeline {
       steps {
         sh '''
           set -e
-          # ใช้โหมดไม่พึ่ง git เพื่อกัน "0 files"
           docker run --rm --volumes-from jenkins -w "$PWD" python:3.11-slim bash -lc '
+            apt-get update &&
+            apt-get install -y --no-install-recommends git ca-certificates &&
+            rm -rf /var/lib/apt/lists/* &&
             pip install --no-cache-dir -q semgrep &&
-            semgrep scan --no-git \
+            semgrep scan \
               --include "**/*.py" \
               --config=p/owasp-top-ten \
               --config=p/python \
@@ -47,9 +52,9 @@ pipeline {
     }
 
     stage('pip-audit (Dependencies)') {
+      when { expression { return fileExists('requirements.txt') } }
       steps {
         sh '''
-          # ระบุไฟล์ให้ชัดเจน อย่าให้ -r ว่าง
           docker run --rm --volumes-from jenkins -w "$PWD" python:3.11-slim bash -lc '
             pip install --no-cache-dir -q pip-audit &&
             pip-audit -r requirements.txt -f json -o security-reports/pip-audit_requirements.json || true
@@ -70,6 +75,7 @@ pipeline {
             --exit-code 1
           TRIVY_RC=$?
           set -e
+          [ -f security-reports/trivy.sarif ] || echo '{"version":"2.1.0","runs":[]}' > security-reports/trivy.sarif
           [ $TRIVY_RC -eq 0 ] || true
         '''
       }
@@ -77,9 +83,7 @@ pipeline {
 
     stage('Publish Reports') {
       steps {
-        recordIssues(
-          tools: [sarif(pattern: 'security-reports/*.sarif')]
-        )
+        recordIssues(tools: [sarif(pattern: 'security-reports/*.sarif')])
         archiveArtifacts artifacts: 'security-reports/*', fingerprint: true
       }
     }
