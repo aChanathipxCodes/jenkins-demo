@@ -27,6 +27,7 @@ pipeline {
             apt-get update &&
             apt-get install -y --no-install-recommends git ca-certificates &&
             rm -rf /var/lib/apt/lists/* &&
+            git config --global --add safe.directory "$PWD" &&
             pip install --no-cache-dir -q semgrep &&
             semgrep scan \
               --include "**/*.py" \
